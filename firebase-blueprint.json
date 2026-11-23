@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "CatProfile": {
+      "title": "CatProfile",
+      "description": "Owner and cat profile storing feline score, Gatonês preference, home safe zone, and latest real-time GPS state.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Google user UID." },
+        "catName": { "type": "string", "description": "Name of the cat (1-40 chars)." },
+        "breed": { "type": "string", "description": "Cat breed or descriptor (1-50 chars)." },
+        "totalScore": { "type": "integer", "description": "Accumulated feline habit score." },
+        "gatonesEnabled": { "type": "boolean", "description": "Whether Gatonês mode is enabled by default." },
+        "homeLatitude": { "type": "number", "description": "Home safe zone center latitude." },
+        "homeLongitude": { "type": "number", "description": "Home safe zone center longitude." },
+        "homeRadiusMeters": { "type": "number", "description": "Safe zone radius in meters." },
+        "lastLatitude": { "type": "number", "description": "Latest tracked latitude." },
+        "lastLongitude": { "type": "number", "description": "Latest tracked longitude." },
+        "lastAccuracyMeters": { "type": "number", "description": "GPS accuracy in meters." },
+        "lastZoneLabel": { "type": "string", "description": "Human-readable zone label." },
+        "gpsTrackingActive": { "type": "boolean", "description": "Whether GPS tracking is currently active." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId", "catName", "breed", "totalScore", "gatonesEnabled",
+        "homeLatitude", "homeLongitude", "homeRadiusMeters",
+        "lastLatitude", "lastLongitude", "lastAccuracyMeters",
+        "lastZoneLabel", "gpsTrackingActive", "createdAt", "updatedAt"
+      ]
+    },
+    "CatHabit": {
+      "title": "CatHabit",
+      "description": "A trackable feline habit with point value and streak counter.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string", "enum": ["HYDRATION", "SCRATCHER", "LITTER", "PLAY", "NAP", "GROOMING", "MISCHIEF"] },
+        "points": { "type": "integer" },
+        "completionCount": { "type": "integer" },
+        "streakDays": { "type": "integer" },
+        "positiveHabit": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "category", "points", "completionCount", "streakDays", "positiveHabit", "createdAt", "updatedAt"]
+    },
+    "HabitLog": {
+      "title": "HabitLog",
+      "description": "Immutable log entry when a feline habit is recorded.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "habitId": { "type": "string" },
+        "habitTitle": { "type": "string" },
+        "pointsDelta": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "habitId", "habitTitle", "pointsDelta", "createdAt"]
+    },
+    "MeowTranslation": {
+      "title": "MeowTranslation",
+      "description": "AI-generated translation from cat meow/sound to human Portuguese and Gatonês.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "inputMode": { "type": "string", "enum": ["AUDIO", "TEXT", "PRESET"] },
+        "meowTranscription": { "type": "string" },
+        "humanMeaning": { "type": "string" },
+        "gatonesReply": { "type": "string" },
+        "detectedMood": { "type": "string" },
+        "confidencePercent": { "type": "integer" },
+        "recommendedAction": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "inputMode", "meowTranscription", "humanMeaning",
+        "gatonesReply", "detectedMood", "confidencePercent", "recommendedAction", "createdAt"
+      ]
+    },
+    "GpsPoint": {
+      "title": "GpsPoint",
+      "description": "Real-time GPS telemetry breadcrumb recorded for the cat.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "accuracyMeters": { "type": "number" },
+        "speedMps": { "type": "number" },
+        "insideSafeZone": { "type": "boolean" },
+        "zoneLabel": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "latitude", "longitude", "accuracyMeters", "speedMps", "insideSafeZone", "zoneLabel", "createdAt"]
+    },
+    "ChatMessageRecord": {
+      "title": "ChatMessageRecord",
+      "description": "Persisted CatGPT conversation turn.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "sender": { "type": "string", "enum": ["USER", "CATGPT"] },
+        "text": { "type": "string" },
+        "gatonesMode": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "sender", "text", "gatonesMode", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/CatProfile" },
+      "description": "Per-user cat profile, score, and latest GPS status."
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": { "$ref": "#/entities/CatHabit" },
+      "description": "Feline habits tracked for scoring."
+    },
+    "/users/{userId}/habit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/HabitLog" },
+      "description": "Historical log of feline habit point changes."
+    },
+    "/users/{userId}/translations/{translationId}": {
+      "schema": { "$ref": "#/entities/MeowTranslation" },
+      "description": "History of meow-to-human translations."
+    },
+    "/users/{userId}/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/GpsPoint" },
+      "description": "Real-time GPS breadcrumb points."
+    },
+    "/users/{userId}/chat_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessageRecord" },
+      "description": "CatGPT chat history."
+    }
+  }
+}

@@ -1,0 +1,227 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // --- Entity Validation Helpers ---
+    function isValidCatProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.catName is string && data.catName.size() >= 1 && data.catName.size() <= 40 &&
+             data.breed is string && data.breed.size() >= 1 && data.breed.size() <= 50 &&
+             data.totalScore is int && data.totalScore >= 0 && data.totalScore <= 1000000 &&
+             data.gatonesEnabled is bool &&
+             data.homeLatitude is number && data.homeLatitude >= -90 && data.homeLatitude <= 90 &&
+             data.homeLongitude is number && data.homeLongitude >= -180 && data.homeLongitude <= 180 &&
+             data.homeRadiusMeters is number && data.homeRadiusMeters >= 10 && data.homeRadiusMeters <= 5000 &&
+             data.lastLatitude is number && data.lastLatitude >= -90 && data.lastLatitude <= 90 &&
+             data.lastLongitude is number && data.lastLongitude >= -180 && data.lastLongitude <= 180 &&
+             data.lastAccuracyMeters is number && data.lastAccuracyMeters >= 0 && data.lastAccuracyMeters <= 10000 &&
+             data.lastZoneLabel is string && data.lastZoneLabel.size() <= 100 &&
+             data.gpsTrackingActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCatHabit(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+             data.category in ['HYDRATION', 'SCRATCHER', 'LITTER', 'PLAY', 'NAP', 'GROOMING', 'MISCHIEF'] &&
+             data.points is int && data.points >= -50 && data.points <= 200 &&
+             data.completionCount is int && data.completionCount >= 0 && data.completionCount <= 100000 &&
+             data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 10000 &&
+             data.positiveHabit is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidHabitLog(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.habitId is string && data.habitId.size() >= 1 && data.habitId.size() <= 128 &&
+             data.habitTitle is string && data.habitTitle.size() >= 1 && data.habitTitle.size() <= 80 &&
+             data.pointsDelta is int && data.pointsDelta >= -50 && data.pointsDelta <= 200 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidMeowTranslation(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.inputMode in ['AUDIO', 'TEXT', 'PRESET'] &&
+             data.meowTranscription is string && data.meowTranscription.size() >= 1 && data.meowTranscription.size() <= 200 &&
+             data.humanMeaning is string && data.humanMeaning.size() >= 1 && data.humanMeaning.size() <= 500 &&
+             data.gatonesReply is string && data.gatonesReply.size() >= 1 && data.gatonesReply.size() <= 500 &&
+             data.detectedMood is string && data.detectedMood.size() >= 1 && data.detectedMood.size() <= 60 &&
+             data.confidencePercent is int && data.confidencePercent >= 0 && data.confidencePercent <= 100 &&
+             data.recommendedAction is string && data.recommendedAction.size() >= 1 && data.recommendedAction.size() <= 300 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidGpsPoint(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.latitude is number && data.latitude >= -90 && data.latitude <= 90 &&
+             data.longitude is number && data.longitude >= -180 && data.longitude <= 180 &&
+             data.accuracyMeters is number && data.accuracyMeters >= 0 && data.accuracyMeters <= 10000 &&
+             data.speedMps is number && data.speedMps >= 0 && data.speedMps <= 200 &&
+             data.insideSafeZone is bool &&
+             data.zoneLabel is string && data.zoneLabel.size() >= 1 && data.zoneLabel.size() <= 100 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidChatMessage(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.sender in ['USER', 'CATGPT'] &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 4000 &&
+             data.gatonesMode is bool &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'catName', 'breed', 'totalScore', 'gatonesEnabled',
+                         'homeLatitude', 'homeLongitude', 'homeRadiusMeters',
+                         'lastLatitude', 'lastLongitude', 'lastAccuracyMeters',
+                         'lastZoneLabel', 'gpsTrackingActive', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'catName', 'breed', 'totalScore', 'gatonesEnabled',
+                         'homeLatitude', 'homeLongitude', 'homeRadiusMeters',
+                         'lastLatitude', 'lastLongitude', 'lastAccuracyMeters',
+                         'lastZoneLabel', 'gpsTrackingActive', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidCatProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidCatProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Action: Edit Cat Profile & Gatonês Preference
+                         incoming().diff(existing()).affectedKeys().hasOnly(['catName', 'breed', 'gatonesEnabled', 'updatedAt']) ||
+                         // Action: Update Feline Score
+                         incoming().diff(existing()).affectedKeys().hasOnly(['totalScore', 'updatedAt']) ||
+                         // Action: Update Home Safe Zone
+                         incoming().diff(existing()).affectedKeys().hasOnly(['homeLatitude', 'homeLongitude', 'homeRadiusMeters', 'updatedAt']) ||
+                         // Action: Update Live GPS Coordinates
+                         incoming().diff(existing()).affectedKeys().hasOnly(['lastLatitude', 'lastLongitude', 'lastAccuracyMeters', 'lastZoneLabel', 'gpsTrackingActive', 'updatedAt'])
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /habits/{habitId} {
+        allow get: if isOwner(userId) && isValidId(habitId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(habitId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'category', 'points', 'completionCount', 'streakDays', 'positiveHabit', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'category', 'points', 'completionCount', 'streakDays', 'positiveHabit', 'createdAt', 'updatedAt']) &&
+                         isValidCatHabit(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(habitId) &&
+                         isValidCatHabit(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'points', 'completionCount', 'streakDays', 'positiveHabit', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(habitId);
+      }
+
+      match /habit_logs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         incoming().keys().hasAll(['userId', 'habitId', 'habitTitle', 'pointsDelta', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'habitId', 'habitTitle', 'pointsDelta', 'createdAt']) &&
+                         isValidHabitLog(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(logId);
+      }
+
+      match /translations/{translationId} {
+        allow get: if isOwner(userId) && isValidId(translationId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(translationId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'inputMode', 'meowTranscription', 'humanMeaning',
+                           'gatonesReply', 'detectedMood', 'confidencePercent', 'recommendedAction', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'inputMode', 'meowTranscription', 'humanMeaning',
+                           'gatonesReply', 'detectedMood', 'confidencePercent', 'recommendedAction', 'createdAt'
+                         ]) &&
+                         isValidMeowTranslation(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(translationId);
+      }
+
+      match /locations/{locationId} {
+        allow get: if isOwner(userId) && isValidId(locationId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(locationId) &&
+                         incoming().keys().hasAll(['userId', 'latitude', 'longitude', 'accuracyMeters', 'speedMps', 'insideSafeZone', 'zoneLabel', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'latitude', 'longitude', 'accuracyMeters', 'speedMps', 'insideSafeZone', 'zoneLabel', 'createdAt']) &&
+                         isValidGpsPoint(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(locationId);
+      }
+
+      match /chat_messages/{messageId} {
+        allow get: if isOwner(userId) && isValidId(messageId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(messageId) &&
+                         incoming().keys().hasAll(['userId', 'sender', 'text', 'gatonesMode', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'sender', 'text', 'gatonesMode', 'createdAt']) &&
+                         isValidChatMessage(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(messageId);
+      }
+    }
+  }
+}

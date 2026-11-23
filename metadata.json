@@ -1,0 +1,6 @@
+{
+  "name": "CatGPT",
+  "description": "IA felina com tradutor de miados e gatonês, modo música relaxante para gatos, rastreador GPS em tempo real e sistema de pontuação de hábitos felinos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
